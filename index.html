@@ -316,15 +316,22 @@
 				}
                 
 				// Loop through all available positions on the grid
-        for (var i = 0; i < available_spots.length; i ++) {
-          var coordinates = available_spots[i].split('-');
+        for (var i = 0; i < available_spots.length; i ++) {        
+       
+          if (available_spots[0] == undefined) {
+            break;
+          }
+          
+          var coordinates = available_spots[0].split('-');
 
 					// If the position is not processed yet
 					// and the position is not below the last row index (no need to fill to bottom)
 					// and the position is not next to the last column index (no need to fill to right)
-          if (!in_array(available_spots[i], processed) &&
+          if (!in_array(available_spots[0], processed) &&
 							coordinates[0] <= highest_row_index &&
-							coordinates[1] <= highest_column_index) {
+							coordinates[1] <= highest_column_index) {   
+              
+              console.log('taking care of row = ' + coordinates[0] + ' col = ' + coordinates[1]);
 
 						// Default all boundries to the current position coordinates
 						var start_row_index = coordinates[0];
