@@ -1,0 +1,951 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1" />
+    <title>Template</title>
+
+    <link type="text/css" href="css/ui-lightness/jquery-ui-1.8.14.custom.css" rel="stylesheet" />	
+    <script type="text/javascript" src="js/jquery-1.5.1.min.js"></script>
+    <script type="text/javascript" src="js/jquery-ui-1.8.14.custom.min.js"></script>
+    <script type="text/javascript" src="js/hittest.js"></script>
+		<script type="text/javascript" src="js/jquery.json-2.2.min.js"></script>
+		<script type="text/javascript" src="js/debug_scenarios.js"></script>
+
+    <style>
+      
+      * {
+        padding:0;
+        margin:0;
+      }
+        
+      body{
+        background: darkgrey;
+      }      
+      
+      #wrapper{
+        margin: 30px 0 0 100px;
+        width: 960px;
+      }
+
+      .resizable { 
+        position: absolute;
+        top: 100px;
+        right: 20px;
+        width: 50px; 
+        height: 50px; 
+      }
+     
+      .colWrap{
+        width: auto;
+        height: 50px;
+        margin: 20px 0 0 0;
+      }
+      
+      .column 
+      {
+        float:left;
+        background: lightslategrey;
+        opacity:0.5;        
+        height: 50px;
+				margin-right: 20px;
+				display:block;
+      }
+      
+      .col-1 {width: 50px;}
+			.col-2 {width: 120px;}
+			.col-3 {width: 190px;}
+			.col-4 {width: 260px;}
+			.col-5 {width: 330px;}
+			.col-6 {width: 400px;}
+			.col-7 {width: 470px;}
+			.col-8 {width: 540px;}
+			.col-9 {width: 610px;}
+			.col-10 {width: 680px;}
+
+
+			.row-1 {height: 50px;}
+			.row-2 {height: 120px;}
+			.row-3 {height: 190px;}
+			.row-4 {height: 260px;}
+			.row-5 {height: 330px;}
+			.row-6 {height: 400px;}
+			.row-7 {height: 470px;}
+      
+      .column-last {
+        margin-right:0;
+      }
+      
+			.placeholder-box {
+				background-color: green;
+			}
+
+			.dummy {
+				float:left;
+				background-color: yellow;
+			}  
+
+      .console {
+        color:green;
+        background: #000;        
+      }
+
+			.buttons {
+				margin: 10px 0 10px 100px;
+				padding-bottom:10px;
+			}
+			
+			.left {float:left;}	
+			.right {float:right;}
+			.clear {clear:both;}
+           
+      .close-icon {top: 0; right: 0;	position: absolute;	}
+
+    </style>
+
+    <script>      
+       var rows = new Array();
+       var boxes = new Array();
+       var columns = new Array();			 
+       var available_spots = new Array();
+
+			 var groups = {};
+       
+       var column_count = 0;
+       var row_count = 0;
+
+			 var highest_row_index = 0;
+			 var highest_column_index = 0;
+
+			 var iterations = 3;
+
+			 var column_width = 0; 
+			 var column_height = 0;       	
+     
+      function init() {
+				_init_hittest();
+				_init_click_handlers();
+
+				// Debug 
+				_init_debug();
+
+        // Set values
+        column_count = $('.colWrap:first .column').length;
+        row_count = $('.colWrap').length;
+				
+ 				column_width = $('.column').width() + parseInt($('.column').css('margin-right'));
+				column_height = $('.colWrap').height() + parseInt($('.colWrap').css('margin-top'));
+				       
+        _populate_available_spots();
+      }
+
+			/**
+			 * Adds a new draggable box element to the DOM.
+       */
+			function _add_box(box) {
+				
+				// Defaults to drag or specified as draggable
+				if (box == undefined || box.type == 'draggable') {
+					var box_element = $("<div class='box drag-box snap draggable resizable ui-widget-content'>BOX<span class='close-icon ui-icon ui-icon-closethick'></span></div>");  
+							box_element.css('position', 'absolute');
+							box_element.resizable({
+								grid: [column_width, column_height],
+								ghost: false,					
+								helper: 'ui-state-highlight'			
+							});
+							box_element.draggable({
+								cursor:"move",
+								snapTolerance: column_width,
+								stack: ".resize",
+								snap: ".column", 
+								snapMode: "inner",
+								containment: "#wrapper"
+							});
+
+							// Positions are provided
+							if (box != undefined) {
+								box_element.css('top', box.top);
+								box_element.css('left', box.left);
+								box_element.addClass('col-' + box.cols);
+								box_element.addClass('row-' + box.rows);
+							}
+							// No positions found, so look for free position
+							else {
+	
+								// If no spot found, the grid is full	and no box can be added				
+								if (available_spots[0] == undefined) {
+									return;
+								}
+
+								var coordinates = available_spots[0].split('-');
+								var box_top = 50 + (coordinates[0] * column_width);
+								var box_left = 100 + (coordinates[1] * column_width);
+		
+								box_element.css('top', box_top + 'px');
+								box_element.css('left', box_left + 'px');
+							}
+				}
+
+				if (box != undefined && box.type == 'placeholder') {
+						var box_element = $("<div class='box placeholder-box'>Ghost</div>");
+								box_element .css('z-index', 2);
+								box_element.css('top', box.top);
+								box_element.css('left', box.left);
+								box_element.addClass('col-' + box.cols);
+								box_element.addClass('row-' + box.rows);
+								box_element.css('position', 'absolute');
+				}
+
+				
+
+				$("#wrapper").append(box_element);
+
+				_init_ui_handlers(); 
+				_populate_all();
+	
+			  $(".close-icon").click(function(){
+			    $(this).parent().remove();						
+			  });				
+			}
+
+			function _init_debug() {	
+				// Populate the debug scenarios options		
+				for (var i = 0; i < debug_scenarios.length; i++) {
+					$('#debug-scenarios').append('<option value="' + i + '">Setup '+ (i + 1) +'</option>');
+				}		
+
+				// Attach click event to debug button
+				$('#button-import').bind('click', function() {
+					var selected_scenario = debug_scenarios[$('#debug-scenarios').val()];						
+					_do_import(selected_scenario);
+				});	
+			}			
+
+			/**
+			 * Start the detection of overlapping boxes
+			 */
+			function _init_hittest() {
+				 // if function is allready started clearInterval
+        if ( typeof hittestInt !== 'undefined' ) clearInterval( hittestInt );     
+        hittestInt = setInterval(function(){						 
+          // variable hit is Boolean
+          var hit = $('.resizable')._hittest( $('.resizable'));
+          // write to console
+          if( hit == true){
+           	// $('.console').html('ZOMG, hitting' );
+            $('.resizable').draggable({ revert: true });
+          }
+          else {
+            //$('.console').html('Empty');           
+            $('.resizable').draggable({ revert: false });
+          }		
+        },10);
+			}
+
+			/**
+			 * Wraps all bindings of events
+       */
+			function _init_click_handlers() {
+				$("#button-add").bind('click', function() {
+					_do_remove_blank_placeholders();
+					_add_box();					
+        });
+				$('#button-blanks').bind('click', function() {   
+					_populate_all();				
+					_do_remove_blank_placeholders();
+					_do_fill_blanks();
+				});				
+				$('#button-layout').bind('click', function() {     
+					_populate_all();				
+					_do_remove_blank_placeholders();
+					_do_fill_blanks();
+					_do_iterations();
+					_do_layout();
+				});
+				$('#button-export').bind('click', function() {
+					_populate_all();
+					
+					_do_export();
+				});
+				$('#button-reset').bind('click', function() {
+					_do_reset();
+				});			
+			}
+
+			/**
+			 * Bind UI handlers
+       */
+			function _init_ui_handlers() {
+				$('.draggable').unbind('dragstop').unbind('dragstart');
+				$('.resizable').unbind('resizestop').unbind('resizestart');
+
+				$('.draggable').bind( "dragstop", function(event, ui) {  
+					_populate_all();
+				});
+				$('.resizable').bind( "resizestop", function(event, ui) {
+					_populate_all();
+				});
+				$('.draggable').bind( "dragstart", function(event, ui) {
+					_do_remove_blank_placeholders();
+				});
+				$('.resizable').bind( "resizestart", function(event, ui) {
+					_do_remove_blank_placeholders();
+				});
+			}
+		
+			/**
+			 * Rebuild all boxes on the grid
+       */
+			function _rebuild_boxes() {
+				// Whip all existing boxes
+				$('.drag-box').remove();
+
+				// Loop all boxes and add them to the DOM
+				for (var j in boxes) {
+					_add_box(boxes[j]);
+				}				
+			}
+      
+      function _do_fill_blanks() {
+				_do_remove_blank_placeholders();
+				
+        var processed = new Array(); // Holds all processed positions
+				
+				// No boxes found
+				if (boxes.length < 1) {
+					return;
+				}
+                
+				// Loop through all available positions on the grid
+        for (var i = 0; i < available_spots.length; i ++) {
+          var coordinates = available_spots[i].split('-');
+
+					// If the position is not processed yet
+					// and the position is not below the last row index (no need to fill to bottom)
+					// and the position is not next to the last column index (no need to fill to right)
+          if (!in_array(available_spots[i], processed) &&
+							coordinates[0] <= highest_row_index &&
+							coordinates[1] <= highest_column_index) {
+
+						// Default all boundries to the current position coordinates
+						var start_row_index = coordinates[0];
+						var start_column_index = coordinates[1];
+						var end_row_index = coordinates[0];
+						var end_column_index = coordinates[1];
+
+            // Go right of current coordinates
+						// |x|->|->|-> until max column count						
+            var go_right = true;
+            var j = 0;
+            while (go_right == true) {
+
+								if ((parseInt(coordinates[1]) + j) < column_count) {
+		              var key = (coordinates[0] + '-' +  (parseInt(coordinates[1]) + j));
+
+									// Available spot AND not yet processed
+		              if (in_array(key, available_spots) && !in_array(key, processed)) {
+
+										// Update column indexes for the blank box that has to be created
+										if (start_column_index > (parseInt(coordinates[1]) + j)) {
+											start_column_index = (parseInt(coordinates[1]) + j);
+										}
+										if (end_column_index < (parseInt(coordinates[1]) + j)) {
+											end_column_index = (parseInt(coordinates[1]) + j);
+										}
+
+										// We don't need to check this coordinate again.
+		                processed.push(key);
+										
+									  // Next right
+		                j++;
+		              }
+		              else { 
+										// Coordinate contains a box already or has already been processed           
+		                go_right = false;
+		              }   
+								}   
+								else {
+									// Border right has been reached (column_count)
+									go_right = false;
+								}
+            }
+
+            // Go down
+						// |x|x|x|x
+						//  |
+						//  v
+            // Until max row
+						var steps_right = j; // This defines how many steps we went to the right in the previous loop, we have to check each coordinate down in the right direction as well.
+            var go_down = true;
+            var j = 0; 
+            
+            while (go_down == true) {
+              
+							if ((parseInt(coordinates[0]) + j) < row_count && (parseInt(coordinates[0]) + j) <= highest_row_index) {
+		            var key = (parseInt(coordinates[0]) + j) + '-' + coordinates[1];
+
+		            if (in_array(key, available_spots)) {
+									// Row
+								  if (start_row_index > (parseInt(coordinates[0]) + j)) {
+										start_row_index = (parseInt(coordinates[0]) + j);
+									}
+									if (end_row_index < (parseInt(coordinates[0]) + j)) {
+										end_row_index =(parseInt(coordinates[0]) + j);
+									}								
+
+		              processed.push(key);
+
+								  // Before we go down further we may need to check to our right on this dimension.
+									// Go right again...
+									// |x|x|x|x
+									//  |
+									//  v
+									// |x|->|->|-> until max column count
+									if (steps_right > 0) {
+										for (var k = 1; k < steps_right + 1; k ++) {
+											var key = (parseInt(coordinates[0]) + j) + '-' + (parseInt(coordinates[1]) + k);
+
+											if (in_array(key, available_spots)) {
+													// Column
+													if (start_column_index > coordinates[1]) {
+														start_column_index = coordinates[1];
+													}
+													if (end_column_index < coordinates[1]) {
+														end_column_index = coordinates[1];
+													}
+												 processed.push(key);
+											}											
+										}
+									}
+
+		              j++;
+		            }
+		            else {              
+		              go_down = false;
+		            }            
+              }
+							else {
+								go_down = false;
+							}
+            }
+						
+						// Build placeholder box
+						var box = {};
+						box.top = 50 + (start_row_index * column_width); // @TODO remove hard coded values
+						box.left = 100 + (start_column_index * column_width); // @TODO remove hard coded values
+						box.rows = ((end_row_index - start_row_index) + 1);
+						box.cols = ((end_column_index - start_column_index) + 1);
+						box.type = 'placeholder';
+
+						// Add box to DOM						
+						_add_box(box);						
+          }
+        }       
+      }
+
+			/**
+       * Reset all
+       */
+			function _do_reset() {
+				// Remove elements
+				_do_remove_boxes();
+				_do_remove_blank_placeholders();
+
+				// Repopulate all the data arrays
+				_populate_all();
+			}
+
+			function _do_remove_boxes() {
+				$('.drag-box').remove();
+			}
+
+			function _do_remove_blank_placeholders() {
+				$('.placeholder-box').remove();
+			}
+
+			function _do_import(json_string) {
+				// Reset first
+				_do_reset();
+				
+				// Decode JSON and overwrite the boxes
+				boxes = $.parseJSON(json_string);
+
+				// Rebuild the new boxes setup
+			 	_rebuild_boxes();
+			}
+
+			function _do_export() {
+				var json_obj = $.toJSON(boxes);
+				$('.console').html(String(json_obj));
+			} 
+
+			function _do_iterations() {
+				for (var i = 0; i < iterations; i ++) {
+					_group_condition_row_with_equal_height();
+					_group_condition_column_with_equal_width();
+				}					
+			}
+
+			function _do_layout() {
+				$('.layout').children().remove();
+				
+console.log(boxes);
+				for (var i = 0; i < boxes.length; i++) {
+					// Process highest level first
+					if (boxes[i].processed === false) {
+						var div = $("<div class='dummy'>");
+						div.addClass("col-" + boxes[i].cols);
+						div.addClass("row-" + boxes[i].rows);
+						div.attr('id', 'dummy-' + boxes[i].index);
+						$('.layout').append($(div));
+
+						for (var child in boxes[i].children) {	
+							var div = $("<div class='dummy'>");
+							div.addClass("col-" + boxes[i].children[child].cols);
+							div.addClass("row-" + boxes[i].children[child].rows);
+							div.attr('id', 'dummy-' + boxes[i].children[child].index);
+							div.html(boxes[i].children[child].index);
+							$('#dummy-' + boxes[i].children[child].parent).prepend($(div));
+						}				
+					}
+				}
+			}
+
+			function _group_condition_row_with_equal_height() {
+				var groups = {};
+
+				// Look for boxes in the same row with equal heights
+				for (var i = 0; i < boxes.length; i++) {
+					if (boxes[i].processed === false) {
+						var key = boxes[i].start_row_index + '-' + boxes[i].end_row_index;
+
+						if (groups[key] == undefined) {
+						  groups[key] = new Array();
+						}
+					
+	 		     	groups[key].push(boxes[i]);
+					}														
+				}
+
+				// Loop through groups and create new boxes
+				for (var i in groups) {					
+					if (groups[i].length > 1) {
+
+						// Columns
+						var start_column_index = column_count + 1; // Out of range value;
+						var end_column_index = -1;
+						
+						// Rows (in this case no relevant because all boxes are on the same level
+						var start_row_index = 0;
+						var end_row_index = 0;
+
+						// Grouping box index
+						var grouping_box_index = 9999 + Math.floor(Math.random()* 99999) + Math.floor(Math.random()* 99999);
+
+						for (var j in groups[i]) {
+
+							// Look for lowest start_column;
+							if (groups[i][j].start_column_index < start_column_index) {
+								start_column_index = groups[i][j].start_column_index;
+							}
+
+							// Look for highest end_column;
+							if (groups[i][j].end_column_index > end_column_index) {
+								end_column_index = groups[i][j].end_column_index;
+							}					
+							
+							// Set rows (not relevant, because all on same level
+							start_row_index = groups[i][j].start_row_index;
+							end_row_index = groups[i][j].end_row_index;
+
+							// Set the boxes to processed, for further reference.
+							_set_object_by_property_value(boxes, 'index', groups[i][j].index , 'processed', true);
+							_set_object_by_property_value(boxes, 'index', groups[i][j].index , 'parent', grouping_box_index);
+						}
+
+						// Create new boxes from grouped boxes
+						var box = {};
+						box.start_row_index = start_row_index;
+						box.end_row_index = end_row_index;
+						box.start_column_index = start_column_index;
+						box.end_column_index = end_column_index;
+						box.processed = false; // New block needs processing in next iteration.
+						box.index = grouping_box_index;
+						box.children = groups[i];
+						box.cols = start_column_index + end_column_index + 1;
+						box.rows = start_row_index + end_row_index + 1;
+						box.parent = 'none';
+
+						boxes.push(box);													
+					}
+				}	
+			}
+
+			function _group_condition_column_with_equal_width() {
+				var groups = {};
+
+				// Look for boxes in the same row with equal heights
+				for (var i = 0; i < boxes.length; i++) {
+					if (boxes[i].processed === false) {
+						var key = boxes[i].start_column_index + '-' + boxes[i].end_column_index;
+
+						if (groups[key] == undefined) {
+						  groups[key] = new Array();
+						}
+					
+	 		     	groups[key].push(boxes[i]);
+					}														
+				}
+
+				// Loop through groups and create new boxes
+
+				for (var i in groups) {					
+					if (groups[i].length > 1) {
+
+						// Columns (in this case no relevant because all boxes are on the same width)
+						var start_column_index = 0;
+						var end_column_index = 0;
+						
+						// Rows 
+						var start_row_index = row_count + 1; // Out of range value
+						var end_row_index = -1;
+
+						// Grouping box index
+						var grouping_box_index = 9999 + Math.floor(Math.random()* 99999) + Math.floor(Math.random()* 99999);
+
+						for (var j in groups[i]) {
+
+							// Look for lowest start_row;
+							if (groups[i][j].start_row_index < start_row_index) {
+								start_row_index = groups[i][j].start_row_index;
+							}
+
+							// Look for highest end_row;
+							if (groups[i][j].end_row_index > end_row_index) {
+								end_row_index = groups[i][j].end_row_index;
+							}					
+							
+							// Set rows (not relevant, because all on same level
+							start_column_index = groups[i][j].start_column_index;
+							end_column_index = groups[i][j].end_column_index;
+
+							// Set the boxes to processed, for further reference.
+							_set_object_by_property_value(boxes, 'index', groups[i][j].index , 'processed', true);
+							_set_object_by_property_value(boxes, 'index', groups[i][j].index , 'parent', grouping_box_index);
+						}
+
+						// Create new boxes from grouped boxes
+						var box = {};
+						box.start_row_index = start_row_index;
+						box.end_row_index = end_row_index;
+						box.start_column_index = start_column_index;
+						box.end_column_index = end_column_index;
+						box.processed = false; // New block needs processing in next iteration.
+						box.index = grouping_box_index;
+						box.children = groups[i];
+						box.cols = start_column_index + end_column_index + 1;
+						box.rows = start_row_index + end_row_index + 1;
+						box.parent = 'none';
+
+						boxes.push(box);													
+					}
+				}	
+			}      
+      
+      function _populate_box_data() {
+         boxes = new Array();
+				 groups = {};
+				 
+         $('.box').each(function(index, element) {
+           var box = _populate_element_dimensions(element);
+           box.index = index;
+					 box.parent = 'none';
+					 box.type = 'draggable';
+
+					 if (!$(element).hasClass('drag-box')) {
+					 	box.type = 'placeholder';
+					 }
+
+           // Starts in row
+           box.start_row = _lookup_by_property_value(rows, 'top', box.top);
+           box.start_row_index = box.start_row.index;
+
+           // Ends in row
+           box.end_row = _lookup_by_property_value(rows, 'bottom', box.bottom);
+           box.end_row_index = box.end_row.index;
+
+           // Starts in column
+           box.start_column = _lookup_by_property_value(columns, 'left', box.left);
+           box.start_column_index = box.start_column.index;
+
+           // Ends in column
+           box.end_column = _lookup_by_property_value(columns, 'right', box.right);
+           box.end_column_index = box.end_column.index;
+
+					 // Span range
+           box.cols = 1; // default to 1 col;
+           if (box.start_column_index < box.end_column_index) {
+             box.cols = box.end_column_index - box.start_column_index + 1;
+           }
+           
+           box.rows = 1 // defaults to 1 row;
+           if (box.start_row_index < box.end_row_index) {
+             box.rows = box.end_row_index - box.start_row_index + 1;
+           }				
+
+					 // Highest value
+					 if (highest_row_index < box.end_row_index) {
+					   highest_row_index = box.end_row_index;
+					 }
+					 if (highest_column_index < box.end_column_index) {
+					   highest_column_index = box.end_column_index;
+					 }
+
+					 // Unproccessed
+					 box.processed = false;
+           
+           // Remove available spots
+           _update_available_spots(box);
+            
+           boxes.push(box);
+         });      
+      }
+      
+      function _update_available_spots(box) {
+        // Start row and start column can be removed already because it is the 
+        // smallest unit.
+        if (box.cols == 1 && box.rows == 1) {
+          available_spots.splice(available_spots.indexOf(box.start_row_index + '-' + box.start_column_index), 1);
+        }       
+         
+        // Check if box expands to the right
+        if (box.cols > 1) {
+          for (var i = 0; i < box.cols; i ++) {
+            // Check if box expands to the bottom
+            if (box.rows > 1) {
+              for (var j = 0; j < box.rows; j ++) {
+                available_spots.splice(available_spots.indexOf((box.start_row_index + j) + '-' + (box.start_column_index + i)), 1);
+              }
+            }
+            else {
+              available_spots.splice(available_spots.indexOf(box.start_row_index + '-' + (box.start_column_index + i)), 1);
+            }           
+          }
+        }  
+        else {
+          // Check if box expands to the bottom
+          if (box.rows > 1) {
+            for (var j = 0; j < box.rows; j ++) {
+              available_spots.splice(available_spots.indexOf((box.start_row_index + j) + '-' + box.start_column_index), 1);
+            }
+          }
+        }
+      }
+		
+      /**
+			 * Will reset all the arrays and repopulate them.
+       */
+			function _populate_all() {	
+				_populate_available_spots();     			
+				_populate_row_data();   
+				_populate_column_data();
+				_populate_box_data();
+			}
+
+			function  _populate_available_spots() {
+				available_spots = new Array(); // Empties current data
+				for (var i = 0; i < row_count; i ++) {
+					for (var j = 0; j < column_count; j ++) {
+						available_spots.push(i + '-' + j);           
+					}
+				}
+			}
+
+      function _populate_row_data() {
+        rows = new Array();
+         $('.colWrap').each(function(index, element) {
+            var row = _populate_element_dimensions(element);
+            row.index = index;
+            rows.push(row);
+          });
+      }	
+
+      function _populate_column_data() {
+        columns = new Array();        
+        $('.column').each(function(index, element) {
+          var column = _populate_element_dimensions(element);
+					column.index = index;
+          columns.push(column);
+          if (index + 1 == parseInt(column_count)) {
+            return false;           
+          }
+       });   
+      }      
+      
+      function _populate_element_dimensions(element) {
+        var offset = $(element).offset();            
+        var object = {};
+            object.width = $(element).width();
+            object.height = $(element).height();
+            object.top = parseInt(offset.top);
+            object.right = parseInt(object.width + offset.left);
+            object.bottom = parseInt(object.height + offset.top);
+            object.left = parseInt(offset.left);
+
+        return object;
+      }
+
+      function _lookup_by_property_value(array, key, value) {
+        for (var i = 0; i < array.length; i ++) {
+          if (array[i][key] == value) {
+            return array[i];
+          }
+        }
+      }
+
+			function _set_object_by_property_value(obj, get_key, get_value, set_key, set_value) {
+				for (var i in obj) {
+					if (obj[i][get_key] == get_value) {
+						obj[i][set_key] = set_value;
+					}
+				}
+			}  
+      
+      function in_array(needle, haystack, argStrict) {
+        var key = '',
+            strict = !! argStrict;
+        if (strict) {
+            for (key in haystack) {
+                if (haystack[key] === needle) {
+                    return true;
+                }
+            }
+        } else {
+            for (key in haystack) {
+                if (haystack[key] == needle) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+		$(document).ready(function() {
+			init();      
+		});
+    </script>
+
+  </head>
+  <body>
+
+	<div class="buttons">
+		<button id="button-add" class="left">Add box</button>	
+		<button id="button-blanks" class="left">Fill blanks</button>
+		<button id="button-export" class="left">Export</button>		
+		<button id="button-import" class="left">Import</button>
+		<select id="debug-scenarios" class="left"></select>
+		<button id="button-reset" class="left">Reset</button>
+		<button id="button-layout" class="left">Build layout</button>
+	</div>
+
+  <div id="wrapper" class="clear">
+
+    <div class="colWrap">
+      <div class="column col-1"></div>
+      <div class="column col-1"></div>
+      <div class="column col-1"></div>
+      <div class="column col-1"></div>
+      <div class="column col-1"></div>
+      <div class="column col-1"></div>
+      <div class="column col-1"></div>
+      <div class="column col-1"></div>
+      <div class="column col-1"></div>
+      <div class="column col-1 column-last"></div>
+    </div>
+    <div class="colWrap">
+      <div class="column col-1"></div>
+      <div class="column col-1"></div>
+      <div class="column col-1"></div>
+      <div class="column col-1"></div>
+      <div class="column col-1"></div>
+      <div class="column col-1"></div>
+      <div class="column col-1"></div>
+      <div class="column col-1"></div>
+      <div class="column col-1"></div>
+      <div class="column col-1 column-last"></div>
+    </div>
+    <div class="colWrap">
+      <div class="column col-1"></div>
+      <div class="column col-1"></div>
+      <div class="column col-1"></div>
+      <div class="column col-1"></div>
+      <div class="column col-1"></div>
+      <div class="column col-1"></div>
+      <div class="column col-1"></div>
+      <div class="column col-1"></div>
+      <div class="column col-1"></div>
+      <div class="column col-1 column-last"></div>
+    </div>
+    <div class="colWrap">
+      <div class="column col-1"></div>
+      <div class="column col-1"></div>
+      <div class="column col-1"></div>
+      <div class="column col-1"></div>
+      <div class="column col-1"></div>
+      <div class="column col-1"></div>
+      <div class="column col-1"></div>
+      <div class="column col-1"></div>
+      <div class="column col-1"></div>
+      <div class="column col-1 column-last"></div>
+    </div>
+    <div class="colWrap">
+      <div class="column col-1"></div>
+      <div class="column col-1"></div>
+      <div class="column col-1"></div>
+      <div class="column col-1"></div>
+      <div class="column col-1"></div>
+      <div class="column col-1"></div>
+      <div class="column col-1"></div>
+      <div class="column col-1"></div>
+      <div class="column col-1"></div>
+      <div class="column col-1 column-last"></div>
+    </div>
+    <div class="colWrap">
+      <div class="column col-1"></div>
+      <div class="column col-1"></div>
+      <div class="column col-1"></div>
+      <div class="column col-1"></div>
+      <div class="column col-1"></div>
+      <div class="column col-1"></div>
+      <div class="column col-1"></div>
+      <div class="column col-1"></div>
+      <div class="column col-1"></div>
+      <div class="column col-1 column-last"></div>
+    </div>
+    <div class="colWrap">
+      <div class="column col-1"></div>
+      <div class="column col-1"></div>
+      <div class="column col-1"></div>
+      <div class="column col-1"></div>
+      <div class="column col-1"></div>
+      <div class="column col-1"></div>
+      <div class="column col-1"></div>
+      <div class="column col-1"></div>
+      <div class="column col-1"></div>
+      <div class="column col-1 column-last"></div>
+    </div>
+
+  </div>
+
+	<br />
+
+  <div class="console"></div>
+	<div class="layout clear"></div>
+
+</div>
+</body>
+</html>
+
+
+
+
+
